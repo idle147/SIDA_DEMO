@@ -1,0 +1,31 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug Deepspeed Training",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/train_ds.py",
+            "args": [
+                "--version",
+                "liuhaotian/LLaVA-Lightning-7B-delta-v1-1",
+                "--dataset_dir",
+                "./dataset",
+                "--vision_pretrained",
+                "/home/yuyangxin/data/pretrain_models/sam_vit_h_4b8939.pth",
+                "--dataset",
+                "magic_brush",
+                "--sample_rates",
+                "9,3,3,1",
+                "--exp_name",
+                "lisa-7b"
+            ],
+            "env": {
+                "CUDA_VISIBLE_DEVICES": "1",
+                "PYDEVD_DISABLE_FILE_VALIDATION": "1",
+            },
+            "console": "integratedTerminal",
+            "envFile": "${workspaceFolder}/.env"
+        }
+    ]
+}
