@@ -15,6 +15,7 @@
                 "/home/yuyangxin/data/pretrain_models/sam_vit_h_4b8939.pth",
                 "--dataset",
                 "magic_brush",
+                "--no_eval",
                 "--sample_rates",
                 "9,3,3,1",
                 "--exp_name",

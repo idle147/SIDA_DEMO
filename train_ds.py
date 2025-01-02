@@ -407,21 +407,20 @@ def main(args):
             best_score = max(giou, best_score)
             cur_ciou = ciou if is_best else cur_ciou
 
-        save_dir = os.path.join(args.log_dir, f"ckpt_model_{epoch}")
         if args.no_eval or is_best:
             save_dir = os.path.join(args.log_dir, "ckpt_model")
-        if args.local_rank == 0:
-            torch.save(
-                {"epoch": epoch},
-                os.path.join(
-                    args.log_dir,
-                    "meta_log_giou{:.3f}_ciou{:.3f}.pth".format(best_score, cur_ciou),
-                ),
-            )
-            if os.path.exists(save_dir):
-                shutil.rmtree(save_dir)
-        torch.distributed.barrier()
-        model_engine.save_checkpoint(save_dir)
+            if args.local_rank == 0:
+                torch.save(
+                    {"epoch": epoch},
+                    os.path.join(
+                        args.log_dir,
+                        "meta_log_giou{:.3f}_ciou{:.3f}.pth".format(best_score, cur_ciou),
+                    ),
+                )
+                if os.path.exists(save_dir):
+                    shutil.rmtree(save_dir)
+            torch.distributed.barrier()
+            model_engine.save_checkpoint(save_dir)
 
 
 def train(

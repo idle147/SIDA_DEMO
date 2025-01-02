@@ -5,4 +5,5 @@ deepspeed --num_gpus=3 --master_port=24999 train_ds.py \
   --vision_pretrained="/home/yuyangxin/data/pretrain_models/sam_vit_h_4b8939.pth" \
   --dataset="magic_brush" \
   --sample_rates="9,3,3,1" \
-  --exp_name="lisa-7b"
+  --exp_name="lisa-7b" \ 
+  --no_eval
