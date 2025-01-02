@@ -341,6 +341,9 @@ class LISAForCausalLM(LlavaLlamaForCausalLM):
             h_det_til = self.fc_1(pred_embeddings_det[i])  # [1, 256]
             h_seg = pred_embeddings_seg[i]  # [1, 256]
             attention_output, _ = self.attention_module(query=h_det_til, key=h_seg, value=h_seg)
+            # 断言 attention_output不是空向量
+            assert not torch.isnan(attention_output).any(), "Attention output contains NaN"
+            assert not torch.isinf(attention_output).any(), "Attention output contains Inf"
             h_seg_til = h_seg + attention_output
 
             # 将文本特征输入到SAM的prompt_encoder内获取稀疏和密集 embeddings

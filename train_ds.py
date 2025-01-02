@@ -16,6 +16,7 @@ from torch.utils.tensorboard import SummaryWriter
 from models.LISA import LISAForCausalLM
 from models.llava import conversation as conversation_lib
 from utils.dataset import HybridDataset, ValDataset, collate_fn
+from utils.magic_brush_dataset import MagicBrushDataset
 from utils.utils import (
     DEFAULT_IM_END_TOKEN,
     DEFAULT_IM_START_TOKEN,
@@ -36,12 +37,12 @@ def parse_args(args):
     parser.add_argument("--vis_save_path", default="./vis_output", type=str)
     parser.add_argument(
         "--precision",
-        default="fp32",
+        default="bf16",
         type=str,
         choices=["fp32", "bf16", "fp16"],
         help="precision for inference",
     )
-    parser.add_argument("--image_size", default=1024, type=int, help="image size")
+    parser.add_argument("--image_size", default=512, type=int, help="image size")
     parser.add_argument("--model_max_length", default=512, type=int)
     parser.add_argument("--lora_r", default=8, type=int)
     parser.add_argument("--vision-tower", default="openai/clip-vit-large-patch14", type=str)
@@ -159,7 +160,7 @@ def main(args):
 
     # 开启模型输入（输入张量）的梯度计算。
     model.enable_input_require_grads()
-    # model.gradient_checkpointing_enable()
+    model.gradient_checkpointing_enable()
 
     # 将模型移动到设备
     model = model.to(device)
@@ -248,21 +249,31 @@ def main(args):
 
     world_size = torch.cuda.device_count()
     args.distributed = world_size > 1
-    train_dataset = HybridDataset(
-        args.dataset_dir,
-        tokenizer,
-        args.vision_tower,
-        samples_per_epoch=args.batch_size * args.grad_accumulation_steps * args.steps_per_epoch * world_size,
+    # train_dataset = HybridDataset(
+    #     args.dataset_dir,
+    #     tokenizer,
+    #     args.vision_tower,
+    #     samples_per_epoch=args.batch_size * args.grad_accumulation_steps * args.steps_per_epoch * world_size,
+    #     precision=args.precision,
+    #     image_size=args.image_size,
+    #     num_classes_per_sample=args.num_classes_per_sample,
+    #     exclude_val=args.exclude_val,
+    #     dataset=args.dataset,
+    #     sample_rate=[float(x) for x in args.sample_rates.split(",")],
+    #     sem_seg_data=args.sem_seg_data,
+    #     refer_seg_data=args.refer_seg_data,
+    #     vqa_data=args.vqa_data,
+    #     reason_seg_data=args.reason_seg_data,
+    #     explanatory=args.explanatory,
+    # )
+    # 直接使用 MagicBrushDataset
+    train_dataset = MagicBrushDataset(
+        base_image_dir=args.dataset_dir,
+        tokenizer=tokenizer,
+        vision_tower=args.vision_tower,
         precision=args.precision,
         image_size=args.image_size,
-        num_classes_per_sample=args.num_classes_per_sample,
         exclude_val=args.exclude_val,
-        dataset=args.dataset,
-        sample_rate=[float(x) for x in args.sample_rates.split(",")],
-        sem_seg_data=args.sem_seg_data,
-        refer_seg_data=args.refer_seg_data,
-        vqa_data=args.vqa_data,
-        reason_seg_data=args.reason_seg_data,
         explanatory=args.explanatory,
     )
 
@@ -322,7 +333,7 @@ def main(args):
     model_engine, optimizer, train_loader, scheduler = deepspeed.initialize(
         model=model,
         model_parameters=[p for p in model.parameters() if p.requires_grad],
-        training_data=train_dataset.all_datasets[0],
+        training_data=train_dataset,
         collate_fn=partial(
             collate_fn,
             tokenizer=tokenizer,
@@ -396,20 +407,21 @@ def main(args):
             best_score = max(giou, best_score)
             cur_ciou = ciou if is_best else cur_ciou
 
+        save_dir = os.path.join(args.log_dir, f"ckpt_model_{epoch}")
         if args.no_eval or is_best:
             save_dir = os.path.join(args.log_dir, "ckpt_model")
-            if args.local_rank == 0:
-                torch.save(
-                    {"epoch": epoch},
-                    os.path.join(
-                        args.log_dir,
-                        "meta_log_giou{:.3f}_ciou{:.3f}.pth".format(best_score, cur_ciou),
-                    ),
-                )
-                if os.path.exists(save_dir):
-                    shutil.rmtree(save_dir)
-            torch.distributed.barrier()
-            model_engine.save_checkpoint(save_dir)
+        if args.local_rank == 0:
+            torch.save(
+                {"epoch": epoch},
+                os.path.join(
+                    args.log_dir,
+                    "meta_log_giou{:.3f}_ciou{:.3f}.pth".format(best_score, cur_ciou),
+                ),
+            )
+            if os.path.exists(save_dir):
+                shutil.rmtree(save_dir)
+        torch.distributed.barrier()
+        model_engine.save_checkpoint(save_dir)
 
 
 def train(
@@ -565,8 +577,13 @@ def validate(val_loader, model_engine, epoch, writer, args):
     acc_iou_meter.all_reduce()
 
     iou_class = intersection_meter.sum / (union_meter.sum + 1e-10)
-    ciou = iou_class[1]
-    giou = acc_iou_meter.avg[1]
+    # 检查 iou_class 的类型和维度
+    if isinstance(iou_class, (list, np.ndarray)) and len(iou_class) > 1:
+        ciou = iou_class[1]
+        giou = acc_iou_meter.avg[1]
+    else:
+        ciou = iou_class
+        giou = acc_iou_meter.avg
 
     if args.local_rank == 0:
         writer.add_scalar("val/giou", giou, epoch)

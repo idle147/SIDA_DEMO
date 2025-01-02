@@ -27,7 +27,6 @@ class MagicBrushDataset(torch.utils.data.Dataset):
         base_image_dir,
         tokenizer,
         vision_tower,
-        samples_per_epoch=500 * 8 * 2 * 10,
         precision: str = "fp32",
         image_size: int = 500,
         exclude_val=False,
@@ -36,7 +35,6 @@ class MagicBrushDataset(torch.utils.data.Dataset):
         **kwargs,
     ):
         self.exclude_val = exclude_val
-        self.samples_per_epoch = samples_per_epoch
         self.explanatory = explanatory
 
         self.base_image_dir = Path(base_image_dir) / "MagicBrush"
@@ -89,7 +87,7 @@ class MagicBrushDataset(torch.utils.data.Dataset):
         #     print("len(self.img_to_explanation): ", len(self.img_to_explanation))
 
     def __len__(self):
-        return self.samples_per_epoch
+        return len(self.images)
 
     def preprocess(self, x: torch.Tensor) -> torch.Tensor:
         """Normalize pixel values and pad to a square input."""

@@ -265,13 +265,10 @@ class HybridDataset(torch.utils.data.Dataset):
     def __len__(self):
         return self.samples_per_epoch
 
-    def __getitem__(self, idx, inference=False):
-        # ind = np.random.choice(list(range(len(self.datasets))), p=self.sample_rate)
-        # data = self.all_datasets[ind]
-        # inference = False
-        # return *data[0], inference
-        # TODO: 这里只要1个数据集做一下测试就行
-        return self.all_datasets[0]
+    def __getitem__(self, idx):
+        ind = np.random.choice(list(range(len(self.datasets))), p=self.sample_rate)
+        data = self.all_datasets[ind]
+        return data[idx]
 
 
 class ValDataset(torch.utils.data.Dataset):
